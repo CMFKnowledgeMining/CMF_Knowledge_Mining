@@ -24,6 +24,59 @@ def report_gpu():
     gc.collect()
     torch.cuda.empty_cache()
 
+def load_dt_more_vars(target, cmf_thresh, qual_rating=-5, manual_path=False, non_tuning=False):
+    if target == "intersection":
+        keep_cols = ["cmName", "catname", "subcatname", "intersecType", "areaType", "intersecGeometry",
+                     "trafficControl",
+                     "crashType", "crashSeverityKABCO", "crashTOD", 'country', 'state', 'qualRating', 'priorCondition',
+                     'yearsOfDataFrom', 'yearsOfDataTo']
+        feature2 = "intersecType"
+        # dt_path = './data/Intersection_data.xlsx'
+        dt_path = 'C:/Users/yanlin93/Desktop/CMF_data_0712/Intersection_data.xlsx'
+
+        # dt_path = './data/cmfclearinghouse_intersection.xlsx'
+    elif target == "roadway":
+        keep_cols = ["cmName", "catname", "subcatname", "roadwayType", "areaType", "crashType", "crashSeverityKABCO",
+                     "crashTOD",
+                     "roadDivType", "numLanes", 'speedLimit', 'country', 'state', 'qualRating', 'priorCondition',
+                     'yearsOfDataFrom', 'yearsOfDataTo']
+        feature2 = "crashType"
+        # dt_path = './data/roadway_data.xlsx'
+        # dt_path = './data/cmfclearinghouse_roadway.xlsx'
+        if manual_path is False:
+            dt_path = 'C:/Users/yanlin93/Desktop/CMF_data_0712/roadway_data.xlsx'
+        elif manual_path is True:
+            if non_tuning is True:
+                keep_cols = ["cmName", "catname", "subcatname", "treatment", "AfterShoulder", "PriorShoulder", "roadwayType", "numLanes", "areaType",
+                             "crashType", "crashSeverityKABCO", "PriorWidth", "AfterWidth", "crashTOD",
+                             "roadDivType", 'speedLimit', 'country', 'state', 'qualRating', 'priorCondition',
+                             'yearsOfDataFrom', 'yearsOfDataTo']
+            dt_path = "C:/Users/yanlin93/Desktop/CMF_data_0712/train_shouderWidth1.xlsx"
+
+    dt = pd.read_excel(dt_path, header=0)
+    dt = dt.dropna(subset='accModFactor')
+    # plot_pairwise_heatmap(dt, "catname", feature2)
+    dt = dt[dt["qualRating"] >= qual_rating]
+    dt = dt.drop(dt[dt["accModFactor"] <= cmf_thresh[0]].index)
+    dt = dt.drop(dt[dt["accModFactor"] > cmf_thresh[1]].index)
+    dt[dt == "Not Specified"] = np.nan
+    dt[dt == "Not specified"] = np.nan
+
+    dt = dt.sample(frac=1, random_state=2431)
+    dt.reset_index(drop=True)
+    dt['index'] = range(dt.shape[0])
+    dt = dt.set_index('index')
+
+    cmfs = dt["accModFactor"]
+    dt.fillna("Not Specified", inplace=True)
+
+    if non_tuning is True:
+        for col in keep_cols[:-3]:
+            dt[col] = pd.Categorical(dt[col])
+
+    bc_dt = copy.deepcopy(dt[keep_cols])  # base-condition
+    return dt, bc_dt, cmfs, keep_cols
+
 
 def tune_transformer(train_examples, model_name, max_seq_len=16):
     device = torch.device(0 if torch.cuda.is_available() else "cpu")
